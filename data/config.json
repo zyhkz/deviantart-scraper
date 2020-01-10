@@ -1,7 +1,6 @@
 {
-    "save_directory": "D:\\Pictures\\deviantart",
+    "save_directory": "./download",
     "users": [
-        "GUWEIZ",
-        "wataboku"
+        "axsens"
     ]
 }

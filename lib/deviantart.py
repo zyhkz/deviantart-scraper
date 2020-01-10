@@ -55,6 +55,7 @@ class DeviantArtAPI:
         # list of artwork ids
         file_names = utils.file_names(dir_path, pattern=r'-(\d+)\.(.+)$') if dir_path else []
         while True:
+            print('load offset ' + str(offset))
             payload = {
                 'username': user_id,
                 'offset': str(offset),
@@ -103,26 +104,19 @@ class DeviantArtAPI:
         return artworks
 
     def _download_url(self, artwork, retry=False):
-        # download button
-        if artwork['isDownloadable']:
-            res = self.request('GET', artwork['url'])
-            html = unescape(res.text)
-            return re.search(r'href="(https://www.deviantart.com/download/.+?)"', html)[1]
-        url = next(a['src'] for a in artwork['files'] if a['type']=='fullview')
-        # direct image url with other prefixes like /f/ or https://img00
-        if '/v1/fill/' not in url:
-            return url
-        # in case for new uploads where only image quality is allowed to modify
-        if retry:
-            return re.sub(r'(q_\d+,strp|strp)', 'q_100', url)
-        # set image properties. For more details, visit below link:
-        # https://support.wixmp.com/en/article/image-service-3835799
-        a = self.artwork(artwork['deviationId'])
-        w = a['extended']['originalFile']['width']
-        h = a['extended']['originalFile']['height']
-        url = re.match(r'(.+?)\?token=', url)[1]
-        url = re.sub('/f/', '/intermediary/f/', url)
-        url = re.sub('/v1/fill/.*/', f'/v1/fill/w_{w},h_{h},q_100/', url)
+        baseUri = artwork['media']['baseUri']
+        prettyName = artwork['media']['prettyName']
+        token = artwork['media']['token'][0]
+        url = ''
+        for t in artwork['media']['types']:
+            if t['r'] == 0:
+                url = t['c']
+            if url != '' and t['t'] =='fullview':
+                break
+        if url == '':
+            return ''
+        url = url.replace('<prettyName>', prettyName)
+        url = f'{baseUri}/{url}?token={token}'
         return url
 
     def _file_name(self, response, suffix):
@@ -151,6 +145,7 @@ class DeviantArtAPI:
             'size': 0
         }
         try:
+            print('downloading the file: ' + str(artwork['deviationId']))
             download_url = self._download_url(artwork)
             res = self.request('GET', download_url, stream=True)
         except requests.exceptions.HTTPError:
@@ -170,8 +165,9 @@ class DeviantArtAPI:
         return file
 
     def save_user_artworks(self, user_id, dir_path):
-        print(f'download artworks for user {user_id}\n')
+        print(f'download artworks for user {user_id}')
         dir_path = utils.make_dir(dir_path, user_id)
+        print('start to load the artworks')
         artworks = self.user_artworks(user_id, dir_path)
         if not artworks:
             print(f'user {user_id} is up-to-date\n')
